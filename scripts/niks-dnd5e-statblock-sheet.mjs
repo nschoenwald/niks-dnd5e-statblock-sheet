@@ -1,4 +1,4 @@
-import { MODULE_ID, StatblockSheet, StatblockSheet2014, StatblockSheet2024 } from "./statblock-sheet.mjs";
+import { MODULE_ID, STORAGE_PREFIX, StatblockSheet, StatblockSheet2014, StatblockSheet2024 } from "./statblock-sheet.mjs";
 
 Hooks.once("init", () => {
     const documentSheetConfig = foundry.applications.apps.DocumentSheetConfig;
@@ -29,9 +29,10 @@ Hooks.once("init", () => {
         config: true,
         default: false,
         type: Boolean,
-        onChange: show => {
+        // Default for NPCs whose portrait wasn't toggled on the sheet; refresh open sheets
+        onChange: () => {
             for (const app of foundry.applications.instances.values()) {
-                if (app instanceof StatblockSheet) app.render({ force: true });
+                if (app instanceof StatblockSheet) app.render();
             }
         }
     });
@@ -78,20 +79,17 @@ Hooks.once("ready", async () => {
     const lastCleanup = game.user.getFlag(MODULE_ID, "lastCleanupTimestamp") ?? 0;
     if (now - lastCleanup < ONE_WEEK_MS) return;
 
-    // 1. Clean up User Flags
+    // 1. Clean up User Flags, in one update together with the cleanup timestamp
     const allSheetPrefs = game.user.getFlag(MODULE_ID, "sheetPrefs") ?? {};
-
+    const expired = {};
     for (const [actorId, prefs] of Object.entries(allSheetPrefs)) {
-        if (!prefs || typeof prefs !== "object") continue;
-        const lastViewed = prefs.lastViewed ?? 0;
-        if (!lastViewed || (now - lastViewed) >= EXPIRATION_MS) {
-            await game.user.unsetFlag(MODULE_ID, `sheetPrefs.${actorId}`);
-        }
+        const lastViewed = (prefs && (typeof prefs === "object")) ? (prefs.lastViewed ?? 0) : 0;
+        if (!lastViewed || (now - lastViewed) >= EXPIRATION_MS) expired[actorId] = _del;
     }
 
     // 2. Clean up Client localStorage
     try {
-        const prefix = `${MODULE_ID}.sheetPrefs.`;
+        const prefix = STORAGE_PREFIX;
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
@@ -117,5 +115,7 @@ Hooks.once("ready", async () => {
         // Ignore localStorage access errors
     }
 
-    await game.user.setFlag(MODULE_ID, "lastCleanupTimestamp", now);
+    const flagUpdate = { lastCleanupTimestamp: now };
+    if (!foundry.utils.isEmpty(expired)) flagUpdate.sheetPrefs = expired;
+    await game.user.update({ flags: { [MODULE_ID]: flagUpdate } });
 });

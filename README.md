@@ -29,15 +29,16 @@ layouts of the two rule sets. Pick one in the NPC's sheet configuration, or set 
 
 - Attacks, actions, features and gear use the item when clicked; hovering shows the item's tooltip.
 - Ability scores, saving throws, skills and (2024) initiative roll when clicked.
-- Click the hit points to type a new value, or `+5` / `-5` to change them.
+- Click the hit points to type a new value, `+5` / `-5` to change them, or `=5` to set them.
 
 ### View controls
 
 The icons in the title row of the stat block:
 
 - **Biography** (feather): shows the NPC's biography below the stat block.
+- **Portrait**: shows the NPC's portrait next to its name.
 - **Two Columns**: splits the stat block into two columns for wide windows.
-- **Zoom** (magnifier): hover to zoom in or out; click the percentage to reset.
+- **Zoom** (magnifier): hover to zoom in or out (40% to 250%); click the percentage to go back to the default zoom.
 
 ### Edit mode
 
@@ -47,15 +48,19 @@ you leave edit mode, then the sheet returns to its stat block size.
 
 ### Remembered per NPC
 
-Window size, zoom, layout and biography visibility are remembered per NPC and per user (shared by all tokens of the
-same actor), and follow you to other browsers. Preferences for NPCs you haven't opened in 180 days are cleaned up
+Window size, zoom, layout, portrait and biography visibility are remembered per NPC and per user (shared by all tokens of the
+same actor), and follow you to other browsers: the most recent change wins. Preferences for NPCs you haven't opened in 180 days are cleaned up
 automatically. The first time you open an NPC, the window height fits the stat block.
+
+### Limited permission
+
+Players with Limited permission on an NPC see D&D 5e's limited view (name, portrait and biography), not the stat block.
 
 ### Settings
 
 World settings in **Configure Settings**:
 
-- **Show Portrait**: shows the NPC's portrait next to its name.
+- **Show Portrait by Default**: shows the portrait for NPCs you haven't toggled yet.
 - **Default Layout**: one or two columns for NPCs you haven't adjusted yet.
 - **Default Zoom (%)**: the starting zoom.
 - **Show Biography by Default**: opens the biography for NPCs you haven't adjusted yet.

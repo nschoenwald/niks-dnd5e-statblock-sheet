@@ -1,6 +1,30 @@
 export const MODULE_ID = "niks-dnd5e-statblock-sheet";
 
+/** Prefix of the localStorage keys holding sheet preferences: `<prefix><userId>.<actorId>`. */
+export const STORAGE_PREFIX = `${MODULE_ID}.sheetPrefs.`;
+
+/** Zoom limits and step of the zoom buttons. */
+const ZOOM = { min: 0.4, max: 2.5, step: 0.15 };
+
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
+
+/**
+ * Wrap each "<label> <bonus>" entry of a stat block list (e.g. "Animal Handling +5, Perception +3") whose label is
+ * known. Labels are matched in full and case-insensitively, longest first, so multi-word and non-ASCII labels work.
+ * @param {string} html                          The list's HTML.
+ * @param {Map<string, string>} keys             Keys by lowercase label.
+ * @param {(text: string, key: string) => string} wrap  Returns the replacement for a matched entry.
+ * @returns {string}
+ */
+function linkLabeledBonuses(html, keys, wrap) {
+    const labels = Array.from(keys.keys()).sort((a, b) => b.length - a.length).map(l => RegExp.escape(l));
+    if (!labels.length) return html;
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])(${labels.join("|")})\\s*[+\\-\\u2212]\\s*\\d+`, "giu");
+    return html.replace(pattern, (text, label) => {
+        const key = keys.get(label.toLowerCase());
+        return key ? wrap(text, key) : text;
+    });
+}
 
 export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
 
@@ -26,6 +50,7 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
             use: StatblockSheet._onUseItem,
             toggleDoubleColumn: StatblockSheet._toggleDoubleColumn,
             toggleBiography: StatblockSheet._toggleBiography,
+            togglePortrait: StatblockSheet._togglePortrait,
             zoomIn: StatblockSheet._zoomIn,
             zoomOut: StatblockSheet._zoomOut,
             zoomReset: StatblockSheet._zoomReset
@@ -49,56 +74,59 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     };
 
     /**
+     * Key of this actor's preferences in localStorage. Includes the user, so users sharing a browser keep their own.
+     * @type {string}
+     */
+    get #storageKey() {
+        return `${STORAGE_PREFIX}${game.user.id}.${this.baseActor.id}`;
+    }
+
+    /**
      * Retrieve saved sheet preferences for this actor.
-     * Resolution order:
-     * 1. Local client storage (localStorage)
-     * 2. User flags (game.user) synced from other clients
+     * Two copies exist: localStorage (available right after a write) and the user flag (synced from the user's other
+     * browsers). The newer one wins, by `lastViewed`, which every save updates.
      * @returns {Object}
      */
     _getPreferences() {
-        const actorId = this.baseActor.id;
-        const storageKey = `${MODULE_ID}.sheetPrefs.${actorId}`;
+        let local = null;
         try {
-            const clientRaw = localStorage.getItem(storageKey);
-            if ( clientRaw ) return JSON.parse(clientRaw);
+            local = JSON.parse(localStorage.getItem(this.#storageKey) ?? "null");
         } catch (e) {}
-
-        return game.user.getFlag(MODULE_ID, `sheetPrefs.${actorId}`) ?? {};
+        const synced = game.user.getFlag(MODULE_ID, `sheetPrefs.${this.baseActor.id}`) ?? null;
+        if ( local && ((local.lastViewed ?? 0) >= (synced?.lastViewed ?? 0)) ) return local;
+        return synced ?? local ?? {};
     }
 
     /**
-     * Save complete sheet preferences for this actor across both client storage and user flags.
-     * @param {Object} prefs
-     */
-    async _savePreferences(prefs) {
-        const actorId = this.baseActor.id;
-        const finalPrefs = {
-            ...prefs,
-            lastViewed: Date.now()
-        };
-        const storageKey = `${MODULE_ID}.sheetPrefs.${actorId}`;
-        try {
-            localStorage.setItem(storageKey, JSON.stringify(finalPrefs));
-        } catch (e) {}
-
-        return game.user.setFlag(MODULE_ID, `sheetPrefs.${actorId}`, finalPrefs);
-    }
-
-    /**
-     * Update sheet preferences for this actor across both client storage and user flags.
-     * @param {Object} updates
+     * Update sheet preferences for this actor in localStorage and the user flag.
+     * @param {Object} updates  Changed values. `null` removes the saved value, so the default applies again.
      */
     async _updatePreferences(updates) {
-        const currentPrefs = this._getPreferences();
-        return this._savePreferences({
-            ...currentPrefs,
-            ...updates
-        });
+        const prefs = { ...this._getPreferences(), ...updates, lastViewed: Date.now() };
+        const flagUpdate = { ...updates, lastViewed: prefs.lastViewed };
+        for ( const [key, value] of Object.entries(updates) ) {
+            if ( value !== null ) continue;
+            delete prefs[key];
+            flagUpdate[key] = _del;
+        }
+        try {
+            localStorage.setItem(this.#storageKey, JSON.stringify(prefs));
+        } catch (e) {}
+        return game.user.update({ flags: { [MODULE_ID]: { sheetPrefs: { [this.baseActor.id]: flagUpdate } } } });
+    }
+
+    /** @inheritDoc */
+    async _onFirstRender(context, options) {
+        await super._onFirstRender(context, options);
+        // Mark the preferences as recently used, so the cleanup in `ready` keeps them.
+        if ( !foundry.utils.isEmpty(this._getPreferences()) ) this._updatePreferences({});
     }
 
     /** @inheritdoc */
     async _prepareContext(options) {
         const context = await super._prepareContext(options);
+        // Limited actors use dnd5e's limited view.
+        if ( this.actor.limited ) return context;
         Object.assign(context, {
             ...await this.actor.system._prepareEmbedContext(this.rulesVersion),
             name: this.actor.name
@@ -107,15 +135,11 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
         const defaultSettings = {
             doubleColumn: game.settings.get(MODULE_ID, "defaultLayout") === "doubleColumn",
             visibleBiography: game.settings.get(MODULE_ID, "defaultVisibleBiography"),
-            zoom: game.settings.get(MODULE_ID, "defaultZoom") / 100
+            zoom: game.settings.get(MODULE_ID, "defaultZoom") / 100,
+            showPortrait: game.settings.get(MODULE_ID, "showPortrait")
         };
         const savedPrefs = this._getPreferences();
-        context.sheetPrefs = foundry.utils.mergeObject(foundry.utils.duplicate(defaultSettings), savedPrefs);
-        context.sheetPrefs.showPortrait = game.settings.get(MODULE_ID, "showPortrait");
-        
-        if (!foundry.utils.isEmpty(savedPrefs)) {
-            this._updatePreferences({});
-        }
+        context.sheetPrefs = { ...defaultSettings, ...savedPrefs };
         return context;
     }
 
@@ -137,6 +161,8 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     /** @inheritdoc */
     _configureRenderParts(options) {
         let parts = super._configureRenderParts(options);
+        // Limited actors only get dnd5e's limited parts (header and biography); show them as they are.
+        if (this.actor.limited) return parts;
         if (this._mode === this.constructor.MODES.EDIT) {
             if (parts.statblock) {
                 parts.statblock.classes ??= [];
@@ -162,6 +188,7 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     /** @inheritDoc */
     async _onRender(context, options) {
         await super._onRender(context, options);
+        if (this.actor.limited) return;
         this._renderSpellbook({...context, editable: false }, options);
 
         if (this._mode === this.constructor.MODES.PLAY) {
@@ -169,7 +196,6 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
             const title = this.element.querySelector(".statblock-title");
             const portrait = this.element.querySelector(".statblock-portrait");
             if (title && portrait) {
-                if (!context.sheetPrefs.showPortrait) portrait.classList.add("hidden");
                 if (portrait.parentNode !== title) title.insertBefore(portrait, title.firstChild);
             }
 
@@ -189,6 +215,17 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
                 }
                 // Set bio visibility
                 this.element.classList.toggle("visible-bio", !!context.sheetPrefs.visibleBiography);
+
+                // Inject portrait toggle if not present
+                if (!title.querySelector(".toggle-portrait")) {
+                    const portraitToggle = document.createElement("i");
+                    portraitToggle.classList.add("statblock-control", "toggle-portrait", "fa-solid", "fa-image-portrait");
+                    portraitToggle.dataset.action = "togglePortrait";
+                    portraitToggle.dataset.tooltip = "NDSS.Buttons.TogglePortrait";
+                    title.appendChild(portraitToggle);
+                }
+                // Set portrait visibility
+                this.element.classList.toggle("visible-portrait", !!context.sheetPrefs.showPortrait);
 
                 // Add double-column toggle if not present
                 if (!title.querySelector(".toggle-doublecolumn")) {
@@ -234,6 +271,10 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
             // Set zoom
             const statblockContentEl = this.element.querySelector(".statblock-content");
             if (statblockContentEl) statblockContentEl.style.zoom = context.sheetPrefs.zoom || 1;
+
+            // Ability keys by their (localized) abbreviation, as the stat block shows them
+            const abilityKeys = new Map(Object.entries(CONFIG.DND5E.abilities)
+                .map(([key, { abbreviation }]) => [abbreviation.toLowerCase(), key]));
 
             // Cache header dt elements for faster lookup
             const headerDts = Array.from(this.element.querySelectorAll(".statblock-header div dt"));
@@ -297,24 +338,28 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
                     initDd.innerHTML = `<span class="rollable" aria-label="Initiative" data-action="roll" data-type="initiative">${context.summary.initiative}</span>`;
                 }
                 
-                // Wire Gear
-                const formatter = game.i18n.getListFormatter({ type: "unit" });
-                const gear = formatter.format(
-                    this.actor.items.filter(item => item.system.quantity && item.system.properties?.has("gear")).map(item => {
-                        let enrichedGear = `<span class="roll-link" data-action="use" data-item-id="${item.id}">${item.name}</span>`;
-                        if (item.system.quantity > 1) enrichedGear += ` (${dnd5e.utils.formatNumber(item.system.quantity)})`;
-                        return enrichedGear;
-                    })
-                );
+                // Wire Gear, built like dnd5e's list (presentation name, sorted). A gear text set in the stat block
+                // override is left as it is.
                 const gearDd = getHeaderDd(game.i18n.localize("DND5E.Gear.Label"));
-                if (gearDd) {
-                    gearDd.innerHTML = gear;
+                if (gearDd && !this.actor.flags.dnd5e?.statBlockOverride?.gear) {
+                    const formatter = game.i18n.getListFormatter({ type: "unit" });
+                    gearDd.innerHTML = formatter.format(
+                        this.actor.items.filter(item => item.system.quantity && item.system.properties?.has("gear"))
+                            .map(item => ({ item, ...item.system.gearPresentationData() }))
+                            .sort((lhs, rhs) => lhs.name.localeCompare(rhs.name, game.i18n.lang))
+                            .map(({ item, nameHTML }) => {
+                                let enrichedGear = `<span class="roll-link" data-action="use" data-item-id="${item.id}">${nameHTML}</span>`;
+                                if (item.system.quantity > 1) enrichedGear += ` (${dnd5e.utils.formatNumber(item.system.quantity)})`;
+                                return enrichedGear;
+                            })
+                    );
                 }
-                
+
                 // Wire ability tables
                 this.element.querySelectorAll(".statblock-header .abilities tbody tr").forEach(tr => {
                     const abbreviationBox = tr.querySelector("th");
-                    const abbreviation = abbreviationBox.innerText.toLowerCase();
+                    const abbreviation = abilityKeys.get(abbreviationBox.textContent.trim().toLowerCase());
+                    if (!abbreviation) return;
                     abbreviationBox.innerHTML = `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${abbreviation}">${abbreviationBox.innerHTML}</span>`;
                     const abilityScoreBox = tr.querySelector(".score");
                     abilityScoreBox.innerHTML = `<span class="rollable" data-action="roll" data-type="ability" data-ability="${abbreviation}">${abilityScoreBox.innerHTML}</span>`;
@@ -329,7 +374,8 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
             else {
                 // Wire abilities
                 this.element.querySelectorAll(".statblock-header .ability .name").forEach(abilityNameSpan => {
-                    const ability = abilityNameSpan.innerHTML;
+                    const ability = abilityKeys.get(abilityNameSpan.textContent.trim().toLowerCase());
+                    if (!ability) return;
                     abilityNameSpan.innerHTML = `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${ability}">${abilityNameSpan.innerHTML}</span>`;
                     const scoreSpan = abilityNameSpan.parentNode.querySelector(".score");
                     scoreSpan.innerHTML = `<span class="rollable" data-action="roll" data-type="ability" data-ability="${ability}">${scoreSpan.innerHTML}</span>`;
@@ -338,9 +384,8 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
                 // Wire saves
                 const savesDd = getHeaderDd(game.i18n.localize("DND5E.ClassSaves"));
                 if (savesDd) {
-                    savesDd.innerHTML = savesDd.innerHTML.replace(/([\w]+)\s.*?(?=(?:,\s|$))/ig, (abilityText, abilityAbbr) => {
-                        return `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${abilityAbbr.toLowerCase()}">${abilityText}</span>`;
-                    });
+                    savesDd.innerHTML = linkLabeledBonuses(savesDd.innerHTML, abilityKeys, (text, key) =>
+                        `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${key}">${text}</span>`);
                 }
             }
 
@@ -349,8 +394,11 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
             if (hpDd) {
                 const hpInput = this.element.querySelector(`input[name="system.attributes.hp.value"]`);
                 if (hpInput) {
+                    // A copy of dnd5e's HP field without a form name, so only our handler saves it.
+                    // parseInputDelta reads the property from data-name and the maximum from data-max.
                     const statblockHpInput = hpInput.cloneNode(false);
-                    hpInput.setAttribute("name", "");
+                    statblockHpInput.removeAttribute("name");
+                    statblockHpInput.dataset.name = "system.attributes.hp.value";
                     statblockHpInput.removeAttribute("hidden");
                     statblockHpInput.addEventListener("change", this._onChangeHpInput.bind(this));
                     statblockHpInput.addEventListener("focus", () => statblockHpInput.select());
@@ -376,10 +424,9 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
             // Wire skills
             const skillDd = getHeaderDd(game.i18n.localize("DND5E.Skills"));
             if (skillDd) {
-                skillDd.innerHTML = skillDd.innerHTML.replace(/([\w]+)\s.*?(?=(?:,\s|$))/ig, (skillText, skillLabel) => {
-                    const abbreviation = Object.keys(CONFIG.DND5E.skills).find(key => CONFIG.DND5E.skills[key].label === skillLabel);
-                    return `<span class="rollable" data-action="roll" data-type="skill" data-key="${abbreviation}">${skillText}</span>`;
-                });
+                const skillKeys = new Map(Object.entries(CONFIG.DND5E.skills).map(([key, { label }]) => [label.toLowerCase(), key]));
+                skillDd.innerHTML = linkLabeledBonuses(skillDd.innerHTML, skillKeys, (text, key) =>
+                    `<span class="rollable" data-action="roll" data-type="skill" data-key="${key}">${text}</span>`);
             }
 
             // Add tooltips concurrently
@@ -419,13 +466,13 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
 
     /** @inheritdoc */
     _onPosition(position) {
-        if (this._mode === this.constructor.MODES.PLAY) {
+        const statblock = this.element.querySelector(".statblock.npc");
+        if ((this._mode === this.constructor.MODES.PLAY) && !this.actor.limited && statblock) {
             const prefs = this._getPreferences();
-            // Optimize height the first time
-            if (!prefs.height && !prefs.visibleBiography) {
+            // Fit the height to the stat block the first time, unless the biography is shown below it
+            if (!prefs.height && !this.element.classList.contains("visible-bio")) {
                 const headerHeight = this.element.querySelector("header").offsetHeight;
-                const statblockHeight = this.element.querySelector(".statblock.npc").offsetHeight;
-                const newHeight = headerHeight + statblockHeight + 30;
+                const newHeight = headerHeight + statblock.offsetHeight + 30;
                 this.element.style.height = newHeight + "px";
                 position.height = newHeight;
             }
@@ -442,9 +489,11 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
      */
     #saveStatblockSheetSize(position) {
         const { width, height } = position;
+        const prefs = this._getPreferences();
         const updates = {};
-        if ( width !== "auto" ) updates.width = width;
-        if ( height !== "auto" ) updates.height = height;
+        // Moving the window also calls this; only save when the size changed.
+        if ( (width !== "auto") && (width !== prefs.width) ) updates.width = width;
+        if ( (height !== "auto") && (height !== prefs.height) ) updates.height = height;
         if ( foundry.utils.isEmpty(updates) ) return;
         this._updatePreferences(updates);
     }
@@ -468,45 +517,59 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
         this._updatePreferences({ visibleBiography: !isVisibleBio });
     }
 
-    static _zoomIn(event, target) {
+    /**
+     * Show a zoom level on the stat block and its label.
+     * @param {number} zoom
+     */
+    #applyZoom(zoom) {
         const statblockContentEl = this.element.querySelector(".statblock-content");
-        const newZoom = Math.round((parseFloat(statblockContentEl.style.zoom || 1) + 0.15) * 100) / 100;
-        statblockContentEl.style.zoom = newZoom;
-        this.element.querySelector(".zoom-label").innerText = Math.round(newZoom * 100) + "%";
+        if (statblockContentEl) statblockContentEl.style.zoom = zoom;
+        const zoomLabel = this.element.querySelector(".zoom-label");
+        if (zoomLabel) zoomLabel.innerText = Math.round(zoom * 100) + "%";
+    }
+
+    /**
+     * Change the zoom by a step, within the limits, and save it.
+     * @param {number} direction  1 to zoom in, -1 to zoom out.
+     */
+    #stepZoom(direction) {
+        const statblockContentEl = this.element.querySelector(".statblock-content");
+        const current = parseFloat(statblockContentEl?.style.zoom || 1);
+        const newZoom = Math.clamp(Math.round((current + (direction * ZOOM.step)) * 100) / 100, ZOOM.min, ZOOM.max);
+        if (newZoom === current) return;
+        this.#applyZoom(newZoom);
         this._updatePreferences({ zoom: newZoom });
     }
-    
+
+    static _togglePortrait(event, target) {
+        const isVisiblePortrait = this.element.classList.contains("visible-portrait");
+        this.element.classList.toggle("visible-portrait", !isVisiblePortrait);
+        this._updatePreferences({ showPortrait: !isVisiblePortrait });
+    }
+
+    static _zoomIn(event, target) {
+        this.#stepZoom(1);
+    }
+
     static _zoomOut(event, target) {
-        const statblockContentEl = this.element.querySelector(".statblock-content");
-        const newZoom = Math.round((parseFloat(statblockContentEl.style.zoom || 1) - 0.15) * 100) / 100;
-        statblockContentEl.style.zoom = newZoom;
-        this.element.querySelector(".zoom-label").innerText = Math.round(newZoom * 100) + "%";
-        this._updatePreferences({ zoom: newZoom });
+        this.#stepZoom(-1);
     }
 
     static _zoomReset(event, target) {
-        const newZoom100 = game.settings.get(MODULE_ID, "defaultZoom");
-        this.element.querySelector(".statblock-content").style.removeProperty("zoom");
-        this.element.querySelector(".zoom-label").innerText = newZoom100 + "%";
-        const currentPrefs = { ...this._getPreferences() };
-        delete currentPrefs.zoom;
-        this._savePreferences(currentPrefs);
+        this.#applyZoom(game.settings.get(MODULE_ID, "defaultZoom") / 100);
+        this._updatePreferences({ zoom: null });
     }
 
+    /**
+     * Apply a value typed into the stat block's HP field: a number, or a change such as `+5`, `-5` or `=5`.
+     * @param {Event} event
+     */
     _onChangeHpInput(event) {
-        event.preventDefault();
-        const input = event.currentTarget;
-        const rawValue = input.value.trim();
-        const currentHp = Number(this.actor.system.attributes.hp.value) || 0;
-        let newHp = currentHp;
-        if (rawValue.startsWith("+") || rawValue.startsWith("-")) {
-            const delta = parseInt(rawValue, 10);
-            if (!isNaN(delta)) newHp = Math.max(0, currentHp + delta);
-        } else {
-            const parsed = parseInt(rawValue, 10);
-            if (!isNaN(parsed)) newHp = Math.max(0, parsed);
-        }
-        this.actor.update({ "system.attributes.hp.value": newHp });
+        // The sheet's form must not submit this field as well (it would save "+5" as 5).
+        event.stopPropagation();
+        const value = dnd5e.utils.parseInputDelta(event.currentTarget, this.actor);
+        if ((value === undefined) || (value === "")) return;
+        this.actor.update({ "system.attributes.hp.value": Math.max(0, value) });
     }
 }
 

@@ -9,7 +9,8 @@
             "ToggleDoubleColumn": "Zwei Spalten",
             "ZoomIn": "Vergrößern",
             "ZoomOut": "Verkleinern",
-            "ZoomReset": "Zurücksetzen"
+            "ZoomReset": "Zurücksetzen",
+            "TogglePortrait": "Porträt ein-/ausblenden"
         },
         "Settings": {
             "DefaultLayout": {
@@ -24,7 +25,7 @@
                 "Name": "Standard-Zoom (%)"
             },
             "ShowPortrait": {
-                "Name": "Porträt anzeigen"
+                "Name": "Porträt standardmäßig anzeigen"
             }
         }
     }

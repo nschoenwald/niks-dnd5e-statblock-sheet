@@ -9,7 +9,8 @@
             "ToggleDoubleColumn": "Two Columns",
             "ZoomIn": "Zoom In",
             "ZoomOut": "Zoom Out",
-            "ZoomReset": "Reset"
+            "ZoomReset": "Reset",
+            "TogglePortrait": "Toggle Portrait"
         },
         "Settings": {
             "DefaultLayout": {
@@ -24,7 +25,7 @@
                 "Name": "Default Zoom (%)"
             },
             "ShowPortrait": {
-                "Name": "Show Portrait"
+                "Name": "Show Portrait by Default"
             }
         }
     }

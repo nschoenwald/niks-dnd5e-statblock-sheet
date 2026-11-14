@@ -25,6 +25,10 @@
     }
 }
 
+.actor.niks-statblock-sheet:not(.visible-portrait) .statblock-portrait {
+    display: none;
+}
+
 .actor.niks-statblock-sheet .statblock-portrait {
     width: 80px;
     margin-right: 10px;
@@ -68,6 +72,15 @@
             }
         }
 
+        &.toggle-portrait {
+            right: 60px;
+
+            .visible-portrait & {
+                color: var(--color-text-light-1);
+                text-shadow: var(--dnd5e-color-gold) 1px 0 10px;
+            }
+        }
+
         &.toggle-doublecolumn {
             right: 30px;
 
@@ -78,7 +91,7 @@
         }
 
         &.zoom-container {
-            right: 60px;
+            right: 90px;
             width: 90px;
             height: 20px;
             display: flex;
