@@ -15,9 +15,8 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     
     constructor(options={}) {
         super(options);
-        this.baseActor = (this.actor.isToken || this.actor.isSynthetic)
-            ? (this.actor.token?.baseActor ?? this.actor.parent?.actor ?? this.actor)
-            : this.actor;
+        // Unlinked token actors share their preferences with the world actor they were created from.
+        this.baseActor = this.actor.token?.baseActor ?? this.actor;
     }
 
     /** @inheritdoc */
@@ -120,7 +119,7 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
         return context;
     }
 
-      /** @inheritDoc */
+    /** @inheritDoc */
     _configureRenderOptions(options) {
         super._configureRenderOptions(options);
         // Saved sizes belong to view mode. Apply them only when the sheet opens or switches back to view mode,
@@ -299,27 +298,15 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
                 }
                 
                 // Wire Gear
-                const compendiumMap = new Map();
-                for (const actorItem of this.actor.items) {
-                    const compUuid = foundry.utils.parseUuid(actorItem._stats?.compendiumSource)?.uuid;
-                    if (compUuid) compendiumMap.set(compUuid, actorItem);
-                }
-
                 const formatter = game.i18n.getListFormatter({ type: "unit" });
                 const gear = formatter.format(
-                    this.actor.items.filter(item => item.system.quantity && item.system.properties?.has("gear")).map(i => {
-                        let itemOnActor = this.actor.items.get(i.id);
-                        if (!itemOnActor && i.uuid) {
-                            const parsedUuid = foundry.utils.parseUuid(i.uuid)?.uuid;
-                            if (parsedUuid) itemOnActor = compendiumMap.get(parsedUuid);
-                        }
-                        if (!itemOnActor) return "";
-                        let enrichedGear = `<span class="roll-link" data-action="use" data-item-id="${itemOnActor.id ?? i.id}">${itemOnActor.name ?? i.name}</span>`;
-                        if (i.system.quantity > 1) enrichedGear += ` (${dnd5e.utils.formatNumber(i.system.quantity)})`;
+                    this.actor.items.filter(item => item.system.quantity && item.system.properties?.has("gear")).map(item => {
+                        let enrichedGear = `<span class="roll-link" data-action="use" data-item-id="${item.id}">${item.name}</span>`;
+                        if (item.system.quantity > 1) enrichedGear += ` (${dnd5e.utils.formatNumber(item.system.quantity)})`;
                         return enrichedGear;
                     })
                 );
-                const gearDd = getHeaderDd([game.i18n.localize("DND5E.Gear"), game.i18n.localize("DND5E.Gear.Label")]);
+                const gearDd = getHeaderDd(game.i18n.localize("DND5E.Gear.Label"));
                 if (gearDd) {
                     gearDd.innerHTML = gear;
                 }

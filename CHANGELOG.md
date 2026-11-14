@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 14.0.1
+
+### Improved
+- Removed leftover code from older D&D 5e versions. No visible changes.
+
 ## 14.0.0
 
 First release as Nik's DnD5e Statblock Sheet, based on 5e Statblock Sheet by Aioros.
