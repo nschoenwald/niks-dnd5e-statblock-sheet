@@ -1,0 +1,31 @@
+{
+    "NDSS": {
+        "SheetNames": {
+            "2014": "Werteblock 2014 (Nik)",
+            "2024": "Werteblock 2024 (Nik)"
+        },
+        "Buttons": {
+            "ToggleBiography": "Biografie ein-/ausblenden",
+            "ToggleDoubleColumn": "Zwei Spalten",
+            "ZoomIn": "Vergrößern",
+            "ZoomOut": "Verkleinern",
+            "ZoomReset": "Zurücksetzen"
+        },
+        "Settings": {
+            "DefaultLayout": {
+                "Name": "Standard-Layout",
+                "Auto": "Eine Spalte",
+                "DoubleColumn": "Zwei Spalten"
+            },
+            "DefaultVisibleBiography": {
+                "Name": "Biografie standardmäßig anzeigen"
+            },
+            "DefaultZoom": {
+                "Name": "Standard-Zoom (%)"
+            },
+            "ShowPortrait": {
+                "Name": "Porträt anzeigen"
+            }
+        }
+    }
+}
