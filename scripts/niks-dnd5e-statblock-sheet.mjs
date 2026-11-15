@@ -41,7 +41,7 @@ Hooks.once("init", () => {
         name: "NDSS.Settings.DefaultLayout.Name",
         scope: "world",
         config: true,
-        default: "auto",
+        default: "doubleColumn",
         type: String,
         choices: {
             auto: "NDSS.Settings.DefaultLayout.Auto",
@@ -53,7 +53,7 @@ Hooks.once("init", () => {
         name: "NDSS.Settings.DefaultZoom.Name",
         scope: "world",
         config: true,
-        default: 100,
+        default: 130,
         type: Number,
         range: {
             min: 40,

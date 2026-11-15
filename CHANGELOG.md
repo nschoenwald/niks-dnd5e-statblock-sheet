@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 14.1.2
+
+### Changed
+- New default settings: stat blocks open in **two columns** at **130%** zoom. Worlds where a GM already changed these settings keep their values, and NPCs you already adjusted keep theirs.
+
 ## 14.1.1
 
 ### Fixed

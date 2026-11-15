@@ -61,8 +61,8 @@ Players with Limited permission on an NPC see D&D 5e's limited view (name, portr
 World settings in **Configure Settings**:
 
 - **Show Portrait by Default**: shows the portrait for NPCs you haven't toggled yet.
-- **Default Layout**: one or two columns for NPCs you haven't adjusted yet.
-- **Default Zoom (%)**: the starting zoom.
+- **Default Layout**: one or two columns for NPCs you haven't adjusted yet (default: two columns).
+- **Default Zoom (%)**: the starting zoom (default: 130%).
 - **Show Biography by Default**: opens the biography for NPCs you haven't adjusted yet.
 
 ---
