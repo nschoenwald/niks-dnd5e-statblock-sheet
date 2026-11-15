@@ -21,6 +21,12 @@
     container-type: inline-size;
 }
 
+/* dnd5e fades the top 8px of the sheet body with a mask. A mask creates a stacking context, which would keep the
+   portrait below header overlays (see the portrait), so the stat block view goes without it. */
+.dnd5e2.sheet.actor.niks-statblock-sheet:not(.editable, .limited) .sheet-body {
+    mask-image: none;
+}
+
 .actor.niks-statblock-sheet .statblock-biography {
     flex: 1;
     display: none;
@@ -35,7 +41,9 @@
 }
 
 /* Above overlays that themes draw over the top of NPC sheets for the sheet header (e.g. Carolingian UI's highlight
-   gradient with mix-blend-mode: overlay), so they don't tint the portrait. The rest of the stat block keeps them. */
+   gradient with mix-blend-mode: overlay), so they don't tint the portrait. The rest of the stat block keeps them.
+   This needs every ancestor up to the sheet to be free of stacking contexts: see the container on .statblock-content
+   and the sheet body mask below. */
 .actor.niks-statblock-sheet .statblock-portrait {
     position: relative;
     z-index: 1;

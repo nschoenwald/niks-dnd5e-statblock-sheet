@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 14.2.2
+
+### Fixed
+- **Carolingian UI**: The portrait is now really kept free of the header color overlay; 14.2.1 didn't work in a real game.
+
 ## 14.2.1
 
 ### Fixed
