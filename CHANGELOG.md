@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 14.2.1
+
+### Fixed
+- **Carolingian UI**: The header color overlay is back on the stat block, as on other NPC sheets. Only the portrait is kept free of it, so it shows its real colors.
+
 ## 14.2.0
 
 ### Added

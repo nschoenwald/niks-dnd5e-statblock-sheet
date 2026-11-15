@@ -3,13 +3,6 @@
     min-height: 300px;
 }
 
-/* The stat block view has no sheet header. Themes that draw a header overlay over the top of NPC sheets (e.g.
-   Carolingian UI's highlight gradient with mix-blend-mode: overlay) would tint the title and portrait, so drop it.
-   !important: the theme's selectors are more specific. Edit mode and the limited view keep it. */
-.dnd5e2.sheet.actor.npc.niks-statblock-sheet:not(.editable, .limited)::after {
-    display: none !important;
-}
-
 .actor.niks-statblock-sheet:not(.editable) .window-content .main-content:has(.statblock.npc) {
     flex-direction: column;
 }
@@ -20,6 +13,11 @@
 
 .actor.niks-statblock-sheet .statblock.npc {
     max-width: none;
+}
+
+/* Container for the ability table query below. It sits on the content, not on .statblock.npc: a container is its own
+   stacking context, which would keep the portrait below overlays drawn over the sheet (see the portrait). */
+.actor.niks-statblock-sheet .statblock-content {
     container-type: inline-size;
 }
 
@@ -36,7 +34,11 @@
     display: none;
 }
 
+/* Above overlays that themes draw over the top of NPC sheets for the sheet header (e.g. Carolingian UI's highlight
+   gradient with mix-blend-mode: overlay), so they don't tint the portrait. The rest of the stat block keeps them. */
 .actor.niks-statblock-sheet .statblock-portrait {
+    position: relative;
+    z-index: 1;
     width: 80px;
     margin-right: 10px;
 }
