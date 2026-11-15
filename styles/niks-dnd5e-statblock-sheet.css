@@ -3,6 +3,13 @@
     min-height: 300px;
 }
 
+/* The stat block view has no sheet header. Themes that draw a header overlay over the top of NPC sheets (e.g.
+   Carolingian UI's highlight gradient with mix-blend-mode: overlay) would tint the title and portrait, so drop it.
+   !important: the theme's selectors are more specific. Edit mode and the limited view keep it. */
+.dnd5e2.sheet.actor.npc.niks-statblock-sheet:not(.editable, .limited)::after {
+    display: none !important;
+}
+
 .actor.niks-statblock-sheet:not(.editable) .window-content .main-content:has(.statblock.npc) {
     flex-direction: column;
 }

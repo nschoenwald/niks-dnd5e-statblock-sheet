@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 14.1.1
+
+### Fixed
+- **Carolingian UI**: The portrait and title of the stat block were tinted by the header color overlay that Carolingian UI draws on NPC sheets. The overlay is now only shown in edit mode, where the sheet has a header.
+
 ## 14.1.0
 
 ### Added
