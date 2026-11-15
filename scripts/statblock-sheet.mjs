@@ -189,260 +189,318 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     async _onRender(context, options) {
         await super._onRender(context, options);
         if (this.actor.limited) return;
+        // Slot pips next to dnd5e's slot config button in edit mode (our override skips this in view mode)
         this._renderSpellbook({...context, editable: false }, options);
+        if (this._mode !== this.constructor.MODES.PLAY) return;
 
-        if (this._mode === this.constructor.MODES.PLAY) {
-
-            const title = this.element.querySelector(".statblock-title");
-            const portrait = this.element.querySelector(".statblock-portrait");
-            if (title && portrait) {
-                if (portrait.parentNode !== title) title.insertBefore(portrait, title.firstChild);
-            }
-
-            // Move bio after statblock
-            const statblockPart = this.element.querySelector(`[data-application-part="statblock"]`);
-            const bioPart = this.element.querySelector(`[data-application-part="biographyView"]`);
-            if (statblockPart && bioPart) statblockPart.after(bioPart);
-
-            if (title) {
-                // Inject bio toggle if not present
-                if (!title.querySelector(".toggle-biography")) {
-                    const bioToggle = document.createElement("i");
-                    bioToggle.classList.add("statblock-control", "toggle-biography", "fa-solid", "fa-feather");
-                    bioToggle.dataset.action = "toggleBiography";
-                    bioToggle.dataset.tooltip = "NDSS.Buttons.ToggleBiography";
-                    title.appendChild(bioToggle);
-                }
-                // Set bio visibility
-                this.element.classList.toggle("visible-bio", !!context.sheetPrefs.visibleBiography);
-
-                // Inject portrait toggle if not present
-                if (!title.querySelector(".toggle-portrait")) {
-                    const portraitToggle = document.createElement("i");
-                    portraitToggle.classList.add("statblock-control", "toggle-portrait", "fa-solid", "fa-image-portrait");
-                    portraitToggle.dataset.action = "togglePortrait";
-                    portraitToggle.dataset.tooltip = "NDSS.Buttons.TogglePortrait";
-                    title.appendChild(portraitToggle);
-                }
-                // Set portrait visibility
-                this.element.classList.toggle("visible-portrait", !!context.sheetPrefs.showPortrait);
-
-                // Add double-column toggle if not present
-                if (!title.querySelector(".toggle-doublecolumn")) {
-                    const doubleColumnToggle = document.createElement("i");
-                    doubleColumnToggle.classList.add("statblock-control", "toggle-doublecolumn", "fa-solid", "fa-table-columns");
-                    doubleColumnToggle.dataset.action = "toggleDoubleColumn";
-                    doubleColumnToggle.dataset.tooltip = "NDSS.Buttons.ToggleDoubleColumn";
-                    title.appendChild(doubleColumnToggle);
-                }
-                // Set double column
-                const windowContent = this.element.querySelector(".window-content");
-                if (windowContent) windowContent.classList.toggle("double-column", !!context.sheetPrefs.doubleColumn);
-
-                // Zoom buttons container if not present
-                let zoomContainer = title.querySelector(".zoom-container");
-                if (!zoomContainer) {
-                    zoomContainer = document.createElement("span");
-                    zoomContainer.classList.add("zoom-container", "statblock-control");
-                    title.appendChild(zoomContainer);
-
-                    const zoomInButton = document.createElement("i");
-                    zoomInButton.classList.add("zoom-in", "fa-solid", "fa-magnifying-glass-plus");
-                    zoomInButton.dataset.action = "zoomIn";
-                    zoomInButton.dataset.tooltip = "NDSS.Buttons.ZoomIn";
-                    zoomContainer.appendChild(zoomInButton);
-                    
-                    const zoomLabel = document.createElement("span");
-                    zoomLabel.classList.add("zoom-label");
-                    zoomLabel.dataset.action = "zoomReset";
-                    zoomLabel.dataset.tooltip = "NDSS.Buttons.ZoomReset";
-                    zoomContainer.appendChild(zoomLabel);
-
-                    const zoomOutButton = document.createElement("i");
-                    zoomOutButton.classList.add("zoom-out", "fa-solid", "fa-magnifying-glass-minus");
-                    zoomOutButton.dataset.action = "zoomOut";
-                    zoomOutButton.dataset.tooltip = "NDSS.Buttons.ZoomOut";
-                    zoomContainer.appendChild(zoomOutButton);
-                }
-                const zoomLabel = zoomContainer.querySelector(".zoom-label");
-                if (zoomLabel) zoomLabel.innerText = Math.round((context.sheetPrefs.zoom || 1) * 100) + "%";
-            }
-
-            // Set zoom
-            const statblockContentEl = this.element.querySelector(".statblock-content");
-            if (statblockContentEl) statblockContentEl.style.zoom = context.sheetPrefs.zoom || 1;
-
-            // Ability keys by their (localized) abbreviation, as the stat block shows them
-            const abilityKeys = new Map(Object.entries(CONFIG.DND5E.abilities)
-                .map(([key, { abbreviation }]) => [abbreviation.toLowerCase(), key]));
-
-            // Cache header dt elements for faster lookup
-            const headerDts = Array.from(this.element.querySelectorAll(".statblock-header div dt"));
-            const getHeaderDd = (labels) => {
-                const labelList = Array.isArray(labels) ? labels : [labels];
-                return headerDts.find(dt => labelList.includes(dt.innerText))?.parentNode.querySelector("dd");
-            };
-
-            const actions = Array.from(this.element.querySelectorAll(".statblock-action"));
-            const actionEnrichments = actions.map(async action => {
-                const nameEl = action.querySelector(".name");
-                const nameText = nameEl?.innerText;
-                let item = action.dataset.id ? this.actor.items.get(action.dataset.id) : null;
-                if (!item && nameText) item = this.actor.items.getName(nameText);
-                if (!item) return null;
-
-                const enrichedName = document.createElement("span");
-                enrichedName.classList.add("name", "statblock-roll-link-group");
-                enrichedName.dataset.rollItemUuid = item.uuid;
-                const uses = item.system.uses.label || (item.system.activities?.size === 1 ? item.system.activities?.contents[0]?.uses.label : undefined);
-                const finalName = uses ? `${item.name} (${uses})` : item.name;
-                enrichedName.innerHTML = `<span class="roll-link" data-action="use" data-item-id="${item.id}">${finalName}</span>`;
-
-                const originalDescription = item.system.description.value || "";
-                let description = originalDescription.replace(/@UUID\[(?<uuid>[^\]]+)\](?:\{(?<name>[^\}]+)\})?/g, (match, uuid, name) => {
-                    const linkedDocument = foundry.utils.parseUuid(uuid, { relative: this.actor });
-                    const itemOnActor = (linkedDocument?.id ? this.actor.items.get(linkedDocument.id) : null) ?? (name ? this.actor.items.getName(name) : null);
-                    if (itemOnActor) return `[[/item .${itemOnActor.id}]]`;
-                    return match;
-                });
-                const enrichedHTML = await TextEditor.enrichHTML(description, {
-                    secrets: false, rollData: item.getRollData(), relativeTo: item
-                });
-                return { action, nameEl, enrichedName, enrichedHTML };
-            });
-
-            const enrichedActions = await Promise.all(actionEnrichments);
-            for (const result of enrichedActions) {
-                if (!result) continue;
-                const { action, nameEl, enrichedName, enrichedHTML } = result;
-                nameEl?.remove();
-                action.innerHTML = enrichedHTML;
-                let isWrapped;
-                do {
-                    isWrapped = action.children.length === 1 && action.children[0].tagName === "DIV";
-                    if (isWrapped) {
-                        action.children[0].outerHTML = action.children[0].innerHTML;
-                    }
-                } while (isWrapped);
-                const firstParagraph = action.firstElementChild;
-                if (firstParagraph) {
-                    firstParagraph.prepend(enrichedName);
-                }
-            }
-
-            // 2024 additions
-            if (this.rulesVersion === "2024") {
-                // Wire initiative (2024 only)
-                const initDd = getHeaderDd(game.i18n.localize("DND5E.Initiative"));
-                if (initDd) {
-                    initDd.innerHTML = `<span class="rollable" aria-label="Initiative" data-action="roll" data-type="initiative">${context.summary.initiative}</span>`;
-                }
-                
-                // Wire Gear, built like dnd5e's list (presentation name, sorted). A gear text set in the stat block
-                // override is left as it is.
-                const gearDd = getHeaderDd(game.i18n.localize("DND5E.Gear.Label"));
-                if (gearDd && !this.actor.flags.dnd5e?.statBlockOverride?.gear) {
-                    const formatter = game.i18n.getListFormatter({ type: "unit" });
-                    gearDd.innerHTML = formatter.format(
-                        this.actor.items.filter(item => item.system.quantity && item.system.properties?.has("gear"))
-                            .map(item => ({ item, ...item.system.gearPresentationData() }))
-                            .sort((lhs, rhs) => lhs.name.localeCompare(rhs.name, game.i18n.lang))
-                            .map(({ item, nameHTML }) => {
-                                let enrichedGear = `<span class="roll-link" data-action="use" data-item-id="${item.id}">${nameHTML}</span>`;
-                                if (item.system.quantity > 1) enrichedGear += ` (${dnd5e.utils.formatNumber(item.system.quantity)})`;
-                                return enrichedGear;
-                            })
-                    );
-                }
-
-                // Wire ability tables
-                this.element.querySelectorAll(".statblock-header .abilities tbody tr").forEach(tr => {
-                    const abbreviationBox = tr.querySelector("th");
-                    const abbreviation = abilityKeys.get(abbreviationBox.textContent.trim().toLowerCase());
-                    if (!abbreviation) return;
-                    abbreviationBox.innerHTML = `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${abbreviation}">${abbreviationBox.innerHTML}</span>`;
-                    const abilityScoreBox = tr.querySelector(".score");
-                    abilityScoreBox.innerHTML = `<span class="rollable" data-action="roll" data-type="ability" data-ability="${abbreviation}">${abilityScoreBox.innerHTML}</span>`;
-                    const abilityModBox = tr.querySelector("td:nth-of-type(2)");
-                    abilityModBox.innerHTML = `<span class="rollable" data-action="roll" data-type="ability" data-ability="${abbreviation}">${abilityModBox.innerHTML}</span>`;
-                    const abilitySaveBox = tr.querySelector("td:nth-of-type(3)");
-                    abilitySaveBox.innerHTML = `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${abbreviation}">${abilitySaveBox.innerHTML}</span>`;
-                });
-            }
-
-            // 2014 additions
-            else {
-                // Wire abilities
-                this.element.querySelectorAll(".statblock-header .ability .name").forEach(abilityNameSpan => {
-                    const ability = abilityKeys.get(abilityNameSpan.textContent.trim().toLowerCase());
-                    if (!ability) return;
-                    abilityNameSpan.innerHTML = `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${ability}">${abilityNameSpan.innerHTML}</span>`;
-                    const scoreSpan = abilityNameSpan.parentNode.querySelector(".score");
-                    scoreSpan.innerHTML = `<span class="rollable" data-action="roll" data-type="ability" data-ability="${ability}">${scoreSpan.innerHTML}</span>`;
-                });
-                
-                // Wire saves
-                const savesDd = getHeaderDd(game.i18n.localize("DND5E.ClassSaves"));
-                if (savesDd) {
-                    savesDd.innerHTML = linkLabeledBonuses(savesDd.innerHTML, abilityKeys, (text, key) =>
-                        `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${key}">${text}</span>`);
-                }
-            }
-
-            // HP editing
-            const hpDd = getHeaderDd([game.i18n.localize("DND5E.HP"), game.i18n.localize("DND5E.HitPoints")]);
-            if (hpDd) {
-                const hpInput = this.element.querySelector(`input[name="system.attributes.hp.value"]`);
-                if (hpInput) {
-                    // A copy of dnd5e's HP field without a form name, so only our handler saves it.
-                    // parseInputDelta reads the property from data-name and the maximum from data-max.
-                    const statblockHpInput = hpInput.cloneNode(false);
-                    statblockHpInput.removeAttribute("name");
-                    statblockHpInput.dataset.name = "system.attributes.hp.value";
-                    statblockHpInput.removeAttribute("hidden");
-                    statblockHpInput.addEventListener("change", this._onChangeHpInput.bind(this));
-                    statblockHpInput.addEventListener("focus", () => statblockHpInput.select());
-                    statblockHpInput.addEventListener("blur", () => {
-                        statblockHpText.classList.remove("hidden");
-                        statblockHpInput.classList.add("hidden");
-                    });
-                    statblockHpInput.classList.add("statblock-hp-input", "hidden");
-                    const statblockHpText = document.createElement("span");
-                    statblockHpText.classList.add("statblock-hp-text");
-                    statblockHpText.innerText = this.actor.system.attributes.hp.value;
-                    statblockHpText.addEventListener("click", () => {
-                        statblockHpText.classList.add("hidden");
-                        statblockHpInput.classList.remove("hidden");
-                        statblockHpInput.focus();
-                    });
-                    hpDd.innerHTML = " / " + hpDd.innerHTML;
-                    hpDd.prepend(statblockHpText);
-                    hpDd.prepend(statblockHpInput);
-                }
-            }
-
-            // Wire skills
-            const skillDd = getHeaderDd(game.i18n.localize("DND5E.Skills"));
-            if (skillDd) {
-                const skillKeys = new Map(Object.entries(CONFIG.DND5E.skills).map(([key, { label }]) => [label.toLowerCase(), key]));
-                skillDd.innerHTML = linkLabeledBonuses(skillDd.innerHTML, skillKeys, (text, key) =>
-                    `<span class="rollable" data-action="roll" data-type="skill" data-key="${key}">${text}</span>`);
-            }
-
-            // Add tooltips concurrently
-            const tooltipLinks = Array.from(this.element.querySelectorAll(".roll-link-group[data-type=item], .statblock-roll-link-group"));
-            await Promise.all(tooltipLinks.map(async link => {
-                let uuid = link.dataset.rollItemUuid;
-                if (!uuid && link.dataset.rollItemActor) {
-                    const actor = await fromUuid(link.dataset.rollItemActor);
-                    const item = actor?.items.getName(link.dataset.rollItemName);
-                    uuid = item?.uuid;
-                }
-                if (uuid) {
-                    link.dataset.tooltip = `<section class="loading" data-uuid="${uuid}"><i class="fas fa-spinner fa-spin-pulse"></i></section>`;
-                }
-            }));
+        this.#renderLayout(context);
+        this.#renderControls(context);
+        await this.#renderActions();
+        if (this.rulesVersion === "2024") {
+            this.#linkInitiative(context);
+            this.#linkGear();
         }
+        this.#linkAbilities();
+        this.#renderHitPoints();
+        this.#linkSkills();
+        this.#activateItemLinks();
+        await this.#addItemTooltips();
+    }
+
+    /* -------------------------------------------- */
+    /*  View mode rendering                         */
+    /* -------------------------------------------- */
+
+    /**
+     * Find the value (dd) of a stat block header entry by its label.
+     * @param {string|string[]} labels  Localization keys of the label; the first one found is used.
+     * @returns {HTMLElement|undefined}
+     */
+    #getHeaderDd(labels) {
+        const labelList = (Array.isArray(labels) ? labels : [labels]).map(l => game.i18n.localize(l));
+        const dt = Array.from(this.element.querySelectorAll(".statblock-header div dt"))
+            .find(dt => labelList.includes(dt.innerText));
+        return dt?.parentNode.querySelector("dd");
+    }
+
+    /**
+     * Ability keys by their (localized) abbreviation, as the stat block shows them.
+     * @type {Map<string, string>}
+     */
+    get #abilityKeys() {
+        return new Map(Object.entries(CONFIG.DND5E.abilities)
+            .map(([key, { abbreviation }]) => [abbreviation.toLowerCase(), key]));
+    }
+
+    /**
+     * Place the portrait and biography, and apply the saved layout, visibility and zoom.
+     * @param {object} context
+     */
+    #renderLayout(context) {
+        const { sheetPrefs } = context;
+        const title = this.element.querySelector(".statblock-title");
+        const portrait = this.element.querySelector(".statblock-portrait");
+        if (title && portrait && (portrait.parentNode !== title)) title.insertBefore(portrait, title.firstChild);
+
+        // Biography below the stat block
+        const statblockPart = this.element.querySelector(`[data-application-part="statblock"]`);
+        const bioPart = this.element.querySelector(`[data-application-part="biographyView"]`);
+        if (statblockPart && bioPart) statblockPart.after(bioPart);
+
+        this.element.classList.toggle("visible-bio", !!sheetPrefs.visibleBiography);
+        this.element.classList.toggle("visible-portrait", !!sheetPrefs.showPortrait);
+        this.element.querySelector(".window-content")?.classList.toggle("double-column", !!sheetPrefs.doubleColumn);
+        this.#applyZoom(sheetPrefs.zoom || 1);
+    }
+
+    /**
+     * Add the toggle and zoom controls to the stat block title.
+     * @param {object} context
+     */
+    #renderControls(context) {
+        const title = this.element.querySelector(".statblock-title");
+        if (!title) return;
+        const addToggle = (cls, icon, action, tooltip) => {
+            if (title.querySelector(`.${cls}`)) return;
+            const toggle = document.createElement("i");
+            toggle.classList.add("statblock-control", cls, "fa-solid", icon);
+            Object.assign(toggle.dataset, { action, tooltip });
+            title.appendChild(toggle);
+        };
+        addToggle("toggle-biography", "fa-feather", "toggleBiography", "NDSS.Buttons.ToggleBiography");
+        addToggle("toggle-portrait", "fa-image-portrait", "togglePortrait", "NDSS.Buttons.TogglePortrait");
+        addToggle("toggle-doublecolumn", "fa-table-columns", "toggleDoubleColumn", "NDSS.Buttons.ToggleDoubleColumn");
+
+        if (!title.querySelector(".zoom-container")) {
+            const zoomContainer = document.createElement("span");
+            zoomContainer.classList.add("zoom-container", "statblock-control");
+            const zoomIn = document.createElement("i");
+            zoomIn.classList.add("zoom-in", "fa-solid", "fa-magnifying-glass-plus");
+            Object.assign(zoomIn.dataset, { action: "zoomIn", tooltip: "NDSS.Buttons.ZoomIn" });
+            const zoomLabel = document.createElement("span");
+            zoomLabel.classList.add("zoom-label");
+            Object.assign(zoomLabel.dataset, { action: "zoomReset", tooltip: "NDSS.Buttons.ZoomReset" });
+            const zoomOut = document.createElement("i");
+            zoomOut.classList.add("zoom-out", "fa-solid", "fa-magnifying-glass-minus");
+            Object.assign(zoomOut.dataset, { action: "zoomOut", tooltip: "NDSS.Buttons.ZoomOut" });
+            zoomContainer.append(zoomIn, zoomLabel, zoomOut);
+            title.appendChild(zoomContainer);
+        }
+        this.#applyZoom(context.sheetPrefs.zoom || 1);
+    }
+
+    /**
+     * Replace each action's text with its item's enriched description, led by a link that uses the item.
+     */
+    async #renderActions() {
+        const actions = Array.from(this.element.querySelectorAll(".statblock-action"));
+        const results = await Promise.all(actions.map(async action => {
+            const nameEl = action.querySelector(".name");
+            const nameText = nameEl?.innerText;
+            let item = action.dataset.id ? this.actor.items.get(action.dataset.id) : null;
+            if (!item && nameText) item = this.actor.items.getName(nameText);
+            if (!item) return null;
+
+            const enrichedName = document.createElement("span");
+            enrichedName.classList.add("name", "statblock-roll-link-group");
+            enrichedName.dataset.rollItemUuid = item.uuid;
+            const uses = item.system.uses.label || (item.system.activities?.size === 1 ? item.system.activities?.contents[0]?.uses.label : undefined);
+            const finalName = uses ? `${item.name} (${uses})` : item.name;
+            enrichedName.innerHTML = `<span class="roll-link" data-action="use" data-item-id="${item.id}">${finalName}</span>`;
+
+            // Links to items on this actor become item use links
+            const description = (item.system.description.value || "").replace(/@UUID\[(?<uuid>[^\]]+)\](?:\{(?<name>[^\}]+)\})?/g, (match, uuid, name) => {
+                const linkedDocument = foundry.utils.parseUuid(uuid, { relative: this.actor });
+                const itemOnActor = (linkedDocument?.id ? this.actor.items.get(linkedDocument.id) : null) ?? (name ? this.actor.items.getName(name) : null);
+                return itemOnActor ? `[[/item .${itemOnActor.id}]]` : match;
+            });
+            const enrichedHTML = await TextEditor.enrichHTML(description, {
+                secrets: false, rollData: item.getRollData(), relativeTo: item
+            });
+            return { action, nameEl, enrichedName, enrichedHTML };
+        }));
+
+        for (const result of results) {
+            if (!result) continue;
+            const { action, nameEl, enrichedName, enrichedHTML } = result;
+            nameEl?.remove();
+            action.innerHTML = enrichedHTML;
+            // Unwrap single wrapping divs so the name lands in the first paragraph
+            while ((action.children.length === 1) && (action.children[0].tagName === "DIV")) {
+                action.children[0].outerHTML = action.children[0].innerHTML;
+            }
+            action.firstElementChild?.prepend(enrichedName);
+        }
+    }
+
+    /**
+     * Make the initiative (2024) rollable.
+     * @param {object} context
+     */
+    #linkInitiative(context) {
+        const initDd = this.#getHeaderDd("DND5E.Initiative");
+        if (initDd) {
+            initDd.innerHTML = `<span class="rollable" aria-label="Initiative" data-action="roll" data-type="initiative">${context.summary.initiative}</span>`;
+        }
+    }
+
+    /**
+     * Rebuild the gear list (2024) like dnd5e's (presentation name, sorted), with links that use the items.
+     * A gear text set in the stat block override is left as it is.
+     */
+    #linkGear() {
+        const gearDd = this.#getHeaderDd("DND5E.Gear.Label");
+        if (!gearDd || this.actor.flags.dnd5e?.statBlockOverride?.gear) return;
+        const formatter = game.i18n.getListFormatter({ type: "unit" });
+        gearDd.innerHTML = formatter.format(
+            this.actor.items.filter(item => item.system.quantity && item.system.properties?.has("gear"))
+                .map(item => ({ item, ...item.system.gearPresentationData() }))
+                .sort((lhs, rhs) => lhs.name.localeCompare(rhs.name, game.i18n.lang))
+                .map(({ item, nameHTML }) => {
+                    let enrichedGear = `<span class="roll-link" data-action="use" data-item-id="${item.id}">${nameHTML}</span>`;
+                    if (item.system.quantity > 1) enrichedGear += ` (${dnd5e.utils.formatNumber(item.system.quantity)})`;
+                    return enrichedGear;
+                })
+        );
+    }
+
+    /**
+     * Make ability scores, modifiers and saving throws rollable: the ability table (2024), or the ability row and
+     * the saving throws entry (2014).
+     */
+    #linkAbilities() {
+        const abilityKeys = this.#abilityKeys;
+        const wrap = (el, key, save = false) => {
+            el.innerHTML = `<span class="rollable${save ? " saving-throw" : ""}" data-action="roll" data-type="ability" data-ability="${key}">${el.innerHTML}</span>`;
+        };
+
+        // 2024 ability table
+        this.element.querySelectorAll(".statblock-header .abilities tbody tr").forEach(tr => {
+            const label = tr.querySelector("th");
+            const key = abilityKeys.get(label.textContent.trim().toLowerCase());
+            if (!key) return;
+            wrap(label, key, true);
+            wrap(tr.querySelector(".score"), key);
+            wrap(tr.querySelector("td:nth-of-type(2)"), key);
+            wrap(tr.querySelector("td:nth-of-type(3)"), key, true);
+        });
+
+        // 2014 ability row
+        this.element.querySelectorAll(".statblock-header .ability .name").forEach(name => {
+            const key = abilityKeys.get(name.textContent.trim().toLowerCase());
+            if (!key) return;
+            wrap(name, key, true);
+            wrap(name.parentNode.querySelector(".score"), key);
+        });
+
+        // 2014 saving throws entry
+        const savesDd = this.#getHeaderDd("DND5E.ClassSaves");
+        if (savesDd) {
+            savesDd.innerHTML = linkLabeledBonuses(savesDd.innerHTML, abilityKeys, (text, key) =>
+                `<span class="rollable saving-throw" data-action="roll" data-type="ability" data-ability="${key}">${text}</span>`);
+        }
+    }
+
+    /**
+     * Show current and temporary hit points in the HP entry, each editable with a click.
+     * When the stat block override shows a Temp HP entry instead of HP (2024), its value is the editable temp HP.
+     */
+    #renderHitPoints() {
+        const { value, temp, effectiveMax, max } = this.actor.system.attributes.hp;
+        const tempLabel = game.i18n.localize("DND5E.HEAL.Type.TemporaryShort");
+
+        const hpDd = this.#getHeaderDd(["DND5E.HP", "DND5E.HitPoints"]);
+        if (hpDd) {
+            const current = this.#createEditableNumber("system.attributes.hp.value", value, effectiveMax ?? max);
+            hpDd.prepend(...current, " / ");
+            if (temp > 0) {
+                const tempEl = document.createElement("span");
+                tempEl.classList.add("statblock-temp-hp");
+                tempEl.append(" + ", ...this.#createEditableNumber("system.attributes.hp.temp", temp), ` ${tempLabel}`);
+                hpDd.append(tempEl);
+            }
+        }
+
+        const tempDd = this.#getHeaderDd("DND5E.HEAL.Type.TemporaryShort");
+        if (tempDd) tempDd.prepend(...this.#createEditableNumber("system.attributes.hp.temp", temp ?? 0), " ");
+    }
+
+    /**
+     * Create a number shown as text that turns into an input when clicked. The input takes a value, or a change
+     * such as `+5`, `-5` or `=5`.
+     * @param {string} property  Actor property to update.
+     * @param {number} value     Current value.
+     * @param {number} [max]     Upper limit.
+     * @returns {HTMLElement[]}  The input and the text, or only the text if the sheet isn't editable.
+     */
+    #createEditableNumber(property, value, max) {
+        const input = document.createElement("input");
+        Object.assign(input, { type: "text", inputMode: "numeric", value: value ?? 0 });
+        input.classList.add("statblock-hp-input", "hidden");
+        // No form name, so the sheet's form doesn't submit it; parseInputDelta reads data-name and data-max
+        input.dataset.name = property;
+        if (Number.isFinite(max)) input.dataset.max = max;
+        const text = document.createElement("span");
+        text.innerText = value ?? 0;
+        // Users who can only view the actor get plain text
+        if (!this.isEditable) return [text];
+        text.classList.add("statblock-hp-text");
+
+        input.addEventListener("change", this._onChangeHpInput.bind(this));
+        input.addEventListener("focus", () => input.select());
+        input.addEventListener("blur", () => {
+            text.classList.remove("hidden");
+            input.classList.add("hidden");
+        });
+        text.addEventListener("click", () => {
+            text.classList.add("hidden");
+            input.classList.remove("hidden");
+            input.focus();
+        });
+        return [input, text];
+    }
+
+    /**
+     * Make the skills entry rollable.
+     */
+    #linkSkills() {
+        const skillDd = this.#getHeaderDd("DND5E.Skills");
+        if (!skillDd) return;
+        const skillKeys = new Map(Object.entries(CONFIG.DND5E.skills).map(([key, { label }]) => [label.toLowerCase(), key]));
+        skillDd.innerHTML = linkLabeledBonuses(skillDd.innerHTML, skillKeys, (text, key) =>
+            `<span class="rollable" data-action="roll" data-type="skill" data-key="${key}">${text}</span>`);
+    }
+
+    /**
+     * Right-click on an item link (actions, gear) opens the item's sheet.
+     */
+    #activateItemLinks() {
+        for (const link of this.element.querySelectorAll('.statblock [data-action="use"][data-item-id]')) {
+            link.addEventListener("contextmenu", event => {
+                const item = this.actor.items.get(link.dataset.itemId);
+                if (!item) return;
+                event.preventDefault();
+                event.stopPropagation();
+                item.sheet.render({ force: true });
+            });
+        }
+    }
+
+    /**
+     * Show item tooltips on action names and on item links in descriptions.
+     */
+    async #addItemTooltips() {
+        const tooltipLinks = Array.from(this.element.querySelectorAll(".roll-link-group[data-type=item], .statblock-roll-link-group"));
+        await Promise.all(tooltipLinks.map(async link => {
+            let uuid = link.dataset.rollItemUuid;
+            if (!uuid && link.dataset.rollItemActor) {
+                const actor = await fromUuid(link.dataset.rollItemActor);
+                uuid = actor?.items.getName(link.dataset.rollItemName)?.uuid;
+            }
+            if (uuid) {
+                link.dataset.tooltip = `<section class="loading" data-uuid="${uuid}"><i class="fas fa-spinner fa-spin-pulse"></i></section>`;
+            }
+        }));
     }
 
     /** @inheritdoc */
@@ -502,6 +560,8 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
         const { itemId } = target.closest("[data-item-id]")?.dataset ?? {};
         const item = this.actor.items.get(itemId);
         if ( !item || (target.ariaDisabled === "true") ) return;
+        // Shift-click posts the item to chat without using it
+        if ( event.shiftKey ) return item.displayCard();
         return item.use({ event });
     }
 
@@ -561,15 +621,17 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     }
 
     /**
-     * Apply a value typed into the stat block's HP field: a number, or a change such as `+5`, `-5` or `=5`.
+     * Apply a value typed into an editable stat block number (hit points, temp HP): a number, or a change such as
+     * `+5`, `-5` or `=5`, limited to data-max.
      * @param {Event} event
      */
     _onChangeHpInput(event) {
-        // The sheet's form must not submit this field as well (it would save "+5" as 5).
+        // The sheet's form must not handle this field as well
         event.stopPropagation();
-        const value = dnd5e.utils.parseInputDelta(event.currentTarget, this.actor);
+        const input = event.currentTarget;
+        const value = dnd5e.utils.parseInputDelta(input, this.actor);
         if ((value === undefined) || (value === "")) return;
-        this.actor.update({ "system.attributes.hp.value": Math.max(0, value) });
+        this.actor.update({ [input.dataset.name]: Math.max(0, value) });
     }
 }
 

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 14.2.0
+
+### Added
+- **Temporary hit points**: When an NPC has temporary hit points, the stat block shows them next to its hit points, and you can click them to change them like hit points.
+- **More ways to click an action**: Shift-click an action or gear item to post it to chat without using it. Right-click it to open the item's sheet.
+
+### Improved
+- Changing a default setting (layout, zoom, biography, portrait) now updates open stat blocks right away.
+- The **Default Zoom** setting goes up to 250%, like the zoom buttons.
+
 ## 14.1.2
 
 ### Changed

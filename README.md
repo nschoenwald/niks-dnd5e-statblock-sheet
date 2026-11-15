@@ -28,8 +28,10 @@ layouts of the two rule sets. Pick one in the NPC's sheet configuration, or set 
 ### Clickable stat block
 
 - Attacks, actions, features and gear use the item when clicked; hovering shows the item's tooltip.
+  Shift-click posts the item to chat without using it, right-click opens the item's sheet.
 - Ability scores, saving throws, skills and (2024) initiative roll when clicked.
-- Click the hit points to type a new value, `+5` / `-5` to change them, or `=5` to set them.
+- Click the hit points to type a new value, `+5` / `-5` to change them, or `=5` to set them. Temporary hit points
+  appear next to them when the NPC has any, and can be edited the same way.
 
 ### View controls
 
@@ -58,11 +60,11 @@ Players with Limited permission on an NPC see D&D 5e's limited view (name, portr
 
 ### Settings
 
-World settings in **Configure Settings**:
+World settings in **Configure Settings**. Changes show right away on open sheets of NPCs you haven't adjusted:
 
 - **Show Portrait by Default**: shows the portrait for NPCs you haven't toggled yet.
 - **Default Layout**: one or two columns for NPCs you haven't adjusted yet (default: two columns).
-- **Default Zoom (%)**: the starting zoom (default: 130%).
+- **Default Zoom (%)**: the starting zoom, 40% to 250% (default: 130%).
 - **Show Biography by Default**: opens the biography for NPCs you haven't adjusted yet.
 
 ---

@@ -1,5 +1,14 @@
 import { MODULE_ID, STORAGE_PREFIX, StatblockSheet, StatblockSheet2014, StatblockSheet2024 } from "./statblock-sheet.mjs";
 
+/**
+ * Re-render open stat block sheets, so changed defaults show on NPCs without their own preferences.
+ */
+function refreshSheets() {
+    for (const app of foundry.applications.instances.values()) {
+        if (app instanceof StatblockSheet) app.render();
+    }
+}
+
 Hooks.once("init", () => {
     const documentSheetConfig = foundry.applications.apps.DocumentSheetConfig;
 
@@ -29,12 +38,7 @@ Hooks.once("init", () => {
         config: true,
         default: false,
         type: Boolean,
-        // Default for NPCs whose portrait wasn't toggled on the sheet; refresh open sheets
-        onChange: () => {
-            for (const app of foundry.applications.instances.values()) {
-                if (app instanceof StatblockSheet) app.render();
-            }
-        }
+        onChange: refreshSheets
     });
 
     game.settings.register(MODULE_ID, "defaultLayout", {
@@ -46,7 +50,8 @@ Hooks.once("init", () => {
         choices: {
             auto: "NDSS.Settings.DefaultLayout.Auto",
             doubleColumn: "NDSS.Settings.DefaultLayout.DoubleColumn"
-        }
+        },
+        onChange: refreshSheets
     });
 
     game.settings.register(MODULE_ID, "defaultZoom", {
@@ -58,8 +63,9 @@ Hooks.once("init", () => {
         range: {
             min: 40,
             step: 15,
-            max: 160
+            max: 250
         },
+        onChange: refreshSheets
     });
 
     game.settings.register(MODULE_ID, "defaultVisibleBiography", {
@@ -67,7 +73,8 @@ Hooks.once("init", () => {
         scope: "world",
         config: true,
         default: false,
-        type: Boolean
+        type: Boolean,
+        onChange: refreshSheets
     });
 });
 
