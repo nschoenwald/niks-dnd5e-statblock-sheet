@@ -192,6 +192,12 @@
     width: 36px;
 }
 
+/* Editable hit points: the inputs and the temp HP field without temp HP show only while editing */
+.actor.niks-statblock-sheet .statblock-editable:not(.statblock-editing) :is(.statblock-hp-input, .statblock-edit-only),
+.actor.niks-statblock-sheet .statblock-editing .statblock-hp-text {
+    display: none;
+}
+
 @container (width < 570px) {
     .actor.niks-statblock-sheet .double-column .rules-2024 .abilities {
         grid: none;

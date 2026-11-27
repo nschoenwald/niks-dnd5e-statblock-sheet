@@ -30,8 +30,9 @@ layouts of the two rule sets. Pick one in the NPC's sheet configuration, or set 
 - Attacks, actions, features and gear use the item when clicked; hovering shows the item's tooltip.
   Shift-click posts the item to chat without using it, right-click opens the item's sheet.
 - Ability scores, saving throws, skills and (2024) initiative roll when clicked.
-- Click the hit points to type a new value, `+5` / `-5` to change them, or `=5` to set them. Temporary hit points
-  appear next to them when the NPC has any, and can be edited the same way.
+- Click the hit points to edit them together with the temporary hit points: type a new value, `+5` / `-5` to change
+  them, or `=5` to set them. Tab moves between the two fields, Enter or clicking elsewhere saves, Escape cancels.
+  Temporary hit points also show next to the hit points whenever the NPC has any.
 
 ### View controls
 

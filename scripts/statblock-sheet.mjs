@@ -402,7 +402,8 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     }
 
     /**
-     * Show current and temporary hit points in the HP entry, each editable with a click.
+     * Show current and temporary hit points in the HP entry. Clicking either number edits both at once; without
+     * temporary hit points, their field shows only while editing.
      * When the stat block override shows a Temp HP entry instead of HP (2024), its value is the editable temp HP.
      */
     #renderHitPoints() {
@@ -412,52 +413,104 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
         const hpDd = this.#getHeaderDd(["DND5E.HP", "DND5E.HitPoints"]);
         if (hpDd) {
             const current = this.#createEditableNumber("system.attributes.hp.value", value, effectiveMax ?? max);
-            hpDd.prepend(...current, " / ");
-            if (temp > 0) {
+            hpDd.prepend(...current.elements, " / ");
+            const numbers = [current];
+            if ((temp > 0) || this.isEditable) {
+                const tempNumber = this.#createEditableNumber("system.attributes.hp.temp", temp ?? 0);
                 const tempEl = document.createElement("span");
                 tempEl.classList.add("statblock-temp-hp");
-                tempEl.append(" + ", ...this.#createEditableNumber("system.attributes.hp.temp", temp), ` ${tempLabel}`);
+                if (!(temp > 0)) tempEl.classList.add("statblock-edit-only");
+                tempEl.append(" + ", ...tempNumber.elements, ` ${tempLabel}`);
                 hpDd.append(tempEl);
+                numbers.push(tempNumber);
             }
+            this.#makeEditable(hpDd, numbers);
         }
 
         const tempDd = this.#getHeaderDd("DND5E.HEAL.Type.TemporaryShort");
-        if (tempDd) tempDd.prepend(...this.#createEditableNumber("system.attributes.hp.temp", temp ?? 0), " ");
+        if (tempDd) {
+            const tempNumber = this.#createEditableNumber("system.attributes.hp.temp", temp ?? 0);
+            tempDd.prepend(...tempNumber.elements, " ");
+            this.#makeEditable(tempDd, [tempNumber]);
+        }
     }
 
     /**
-     * Create a number shown as text that turns into an input when clicked. The input takes a value, or a change
-     * such as `+5`, `-5` or `=5`.
+     * Create a number shown as text, with an input for editing it (see #makeEditable). The input takes a value, or
+     * a change such as `+5`, `-5` or `=5`.
      * @param {string} property  Actor property to update.
      * @param {number} value     Current value.
      * @param {number} [max]     Upper limit.
-     * @returns {HTMLElement[]}  The input and the text, or only the text if the sheet isn't editable.
+     * @returns {{input: HTMLInputElement, text: HTMLElement, elements: HTMLElement[]}}  The elements to insert are
+     *   the input and the text, or only the text if the sheet isn't editable.
      */
     #createEditableNumber(property, value, max) {
+        const text = document.createElement("span");
+        text.innerText = value ?? 0;
         const input = document.createElement("input");
         Object.assign(input, { type: "text", inputMode: "numeric", value: value ?? 0 });
-        input.classList.add("statblock-hp-input", "hidden");
+        input.classList.add("statblock-hp-input");
         // No form name, so the sheet's form doesn't submit it; parseInputDelta reads data-name and data-max
         input.dataset.name = property;
         if (Number.isFinite(max)) input.dataset.max = max;
-        const text = document.createElement("span");
-        text.innerText = value ?? 0;
         // Users who can only view the actor get plain text
-        if (!this.isEditable) return [text];
+        if (!this.isEditable) return { input, text, elements: [text] };
         text.classList.add("statblock-hp-text");
+        return { input, text, elements: [input, text] };
+    }
 
-        input.addEventListener("change", this._onChangeHpInput.bind(this));
-        input.addEventListener("focus", () => input.select());
-        input.addEventListener("blur", () => {
-            text.classList.remove("hidden");
-            input.classList.add("hidden");
+    /**
+     * Let a group of editable numbers be edited together: clicking one shows the inputs of all of them, Tab moves
+     * between them, and Enter or leaving the group saves them in one update. Escape discards the changes.
+     * @param {HTMLElement} container  Element holding the numbers.
+     * @param {{input: HTMLInputElement, text: HTMLElement}[]} numbers
+     */
+    #makeEditable(container, numbers) {
+        if (!this.isEditable) return;
+        container.classList.add("statblock-editable");
+        const inputs = numbers.map(n => n.input);
+        let discard = false;
+
+        for (const { input, text } of numbers) {
+            text.addEventListener("click", () => {
+                container.classList.add("statblock-editing");
+                input.focus();
+            });
+            input.addEventListener("focus", () => input.select());
+            // Saved together when editing ends; the sheet's form must not handle the field either
+            input.addEventListener("change", event => event.stopPropagation());
+            input.addEventListener("keydown", event => {
+                if ((event.key !== "Enter") && (event.key !== "Escape")) return;
+                event.preventDefault();
+                discard = event.key === "Escape";
+                input.blur();
+            });
+        }
+
+        container.addEventListener("focusout", event => {
+            if (!container.classList.contains("statblock-editing") || inputs.includes(event.relatedTarget)) return;
+            container.classList.remove("statblock-editing");
+            if (!discard) this.#saveNumbers(inputs);
+            discard = false;
+            // Show the current values again next time, in case nothing was saved
+            for (const { input, text } of numbers) input.value = text.innerText;
         });
-        text.addEventListener("click", () => {
-            text.classList.add("hidden");
-            input.classList.remove("hidden");
-            input.focus();
-        });
-        return [input, text];
+    }
+
+    /**
+     * Save the values typed into editable numbers that changed: numbers, or changes such as `+5`, `-5` or `=5`,
+     * limited to 0 and data-max.
+     * @param {HTMLInputElement[]} inputs
+     */
+    #saveNumbers(inputs) {
+        const updates = {};
+        for (const input of inputs) {
+            const value = dnd5e.utils.parseInputDelta(input, this.actor);
+            if ((value === undefined) || (value === "")) continue;
+            const newValue = Math.max(0, value);
+            if (newValue !== foundry.utils.getProperty(this.actor, input.dataset.name)) updates[input.dataset.name] = newValue;
+        }
+        if (!foundry.utils.isEmpty(updates)) this.actor.update(updates);
     }
 
     /**
@@ -618,20 +671,6 @@ export class StatblockSheet extends dnd5e.applications.actor.NPCActorSheet {
     static _zoomReset(event, target) {
         this.#applyZoom(game.settings.get(MODULE_ID, "defaultZoom") / 100);
         this._updatePreferences({ zoom: null });
-    }
-
-    /**
-     * Apply a value typed into an editable stat block number (hit points, temp HP): a number, or a change such as
-     * `+5`, `-5` or `=5`, limited to data-max.
-     * @param {Event} event
-     */
-    _onChangeHpInput(event) {
-        // The sheet's form must not handle this field as well
-        event.stopPropagation();
-        const input = event.currentTarget;
-        const value = dnd5e.utils.parseInputDelta(input, this.actor);
-        if ((value === undefined) || (value === "")) return;
-        this.actor.update({ [input.dataset.name]: Math.max(0, value) });
     }
 }
 

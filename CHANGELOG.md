@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 14.3.0
+
+### Added
+- **Temporary hit points from the stat block**: Clicking the hit points now also shows a field for temporary hit points, so you can give an NPC temp HP without switching to edit mode. Tab moves between the fields, Enter or clicking elsewhere saves both, Escape cancels.
+
 ## 14.2.2
 
 ### Fixed
